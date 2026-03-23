@@ -9,7 +9,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <PackageId>Philiprehberger.CronExpression</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Philip Rehberger</Authors>
     <Description>Parse, validate, and evaluate cron expressions with next/previous occurrence calculation and schedule listing.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
