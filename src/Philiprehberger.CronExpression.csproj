@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Build settings -->
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -8,10 +9,11 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
+    <!-- Package metadata -->
     <PackageId>Philiprehberger.CronExpression</PackageId>
-    <Version>0.1.2</Version>
+    <Version>0.2.0</Version>
     <Authors>Philip Rehberger</Authors>
-    <Description>Parse, validate, and evaluate cron expressions with next/previous occurrence calculation and schedule listing.</Description>
+    <Description>Parse, validate, and evaluate cron expressions with next/previous occurrence calculation, shortcut aliases, fluent builder, and human-readable descriptions.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cron;scheduling;parser;cron-expression;time</PackageTags>

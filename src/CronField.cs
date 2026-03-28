@@ -31,11 +31,17 @@ internal sealed class CronField
     /// </summary>
     public int Max { get; }
 
-    private CronField(HashSet<int> values, int min, int max)
+    /// <summary>
+    /// Gets the original token string for this field.
+    /// </summary>
+    public string Token { get; }
+
+    private CronField(HashSet<int> values, int min, int max, string token)
     {
         _values = values;
         Min = min;
         Max = max;
+        Token = token;
     }
 
     /// <summary>
@@ -50,6 +56,18 @@ internal sealed class CronField
     /// </summary>
     /// <returns>Sorted matching values.</returns>
     public IReadOnlyList<int> GetValues() => _values.Order().ToList();
+
+    /// <summary>
+    /// Returns true if this field matches all values in its range (i.e. is a wildcard).
+    /// </summary>
+    public bool IsWildcard()
+    {
+        for (int i = Min; i <= Max; i++)
+        {
+            if (!_values.Contains(i)) return false;
+        }
+        return true;
+    }
 
     /// <summary>
     /// Parses a cron field token.
@@ -75,7 +93,7 @@ internal sealed class CronField
             throw new CronParseException($"Field {fieldIndex} produced no valid values from '{token}'.", expression, fieldIndex);
         }
 
-        return new CronField(values, min, max);
+        return new CronField(values, min, max, token);
     }
 
     private static void ParsePart(string part, int min, int max, FieldType fieldType, string expression, int fieldIndex, HashSet<int> values)
@@ -168,6 +186,8 @@ internal sealed class CronField
 /// </summary>
 internal enum FieldType
 {
+    /// <summary>Second field (0-59).</summary>
+    Second,
     /// <summary>Minute field (0-59).</summary>
     Minute,
     /// <summary>Hour field (0-23).</summary>

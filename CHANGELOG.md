@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 (2026-03-27)
+
+- Add optional seconds field support for 6-field cron expressions
+- Add shortcut aliases (@yearly, @monthly, @weekly, @daily, @hourly)
+- Add fluent CronBuilder API for programmatic expression construction
+- Add Describe() method for human-readable cron descriptions
+
 ## 0.1.2 (2026-03-26)
 
 - Add Sponsor badge and fix License link format in README

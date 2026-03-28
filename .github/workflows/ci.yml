@@ -1,4 +1,4 @@
-name: CI
+name: CI + Publish
 
 on:
   push:
@@ -17,6 +17,7 @@ jobs:
           dotnet-version: '8.0.x'
       - run: dotnet restore src/Philiprehberger.CronExpression.csproj
       - run: dotnet build src/Philiprehberger.CronExpression.csproj --configuration Release --no-restore
+      - run: dotnet test tests/Philiprehberger.CronExpression.Tests/Philiprehberger.CronExpression.Tests.csproj --configuration Release --no-restore
 
   publish:
     needs: build
