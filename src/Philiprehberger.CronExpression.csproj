@@ -11,7 +11,7 @@
 
     <!-- Package metadata -->
     <PackageId>Philiprehberger.CronExpression</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>Philip Rehberger</Authors>
     <Description>Parse, validate, and evaluate cron expressions with next/previous occurrence calculation, shortcut aliases, fluent builder, and human-readable descriptions.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
