@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (2026-03-31)
+
+- Add timezone-aware scheduling with `TimeZoneInfo` parameter on `NextOccurrence` and `GetOccurrences`
+- Add `ExclusionCalendar` class for blackout date filtering on occurrence calculations
+- Add Nth weekday support in day-of-week field (`#N` patterns, e.g. `5#3` for third Friday)
+- Handle DST spring-forward and fall-back transitions correctly in timezone mode
+
 ## 0.2.1 (2026-03-31)
 
 - Standardize README to 3-badge format with emoji Support section

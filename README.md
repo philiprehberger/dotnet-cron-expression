@@ -4,7 +4,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Philiprehberger.CronExpression.svg)](https://www.nuget.org/packages/Philiprehberger.CronExpression)
 [![Last updated](https://img.shields.io/github/last-commit/philiprehberger/dotnet-cron-expression)](https://github.com/philiprehberger/dotnet-cron-expression/commits/main)
 
-Parse, validate, and evaluate cron expressions with next/previous occurrence calculation, shortcut aliases, fluent builder, and human-readable descriptions.
+Parse, validate, and evaluate cron expressions with next/previous occurrence calculation, shortcut aliases, fluent builder, human-readable descriptions, timezone-aware scheduling, exclusion calendars, and Nth weekday support.
 
 ## Installation
 
@@ -93,6 +93,47 @@ foreach (var occurrence in schedule.GetOccurrences(start, end))
 }
 ```
 
+### Timezone-Aware Scheduling
+
+```csharp
+// Evaluate the schedule in a specific time zone (handles DST correctly)
+var schedule = Cron.Parse("0 9 * * *"); // Every day at 9:00 AM
+var eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+
+DateTimeOffset next = schedule.NextOccurrence(DateTimeOffset.UtcNow, eastern);
+
+// List occurrences in a time zone
+var occurrences = schedule.GetOccurrences(start, end, eastern);
+```
+
+### Exclusion Calendar
+
+```csharp
+// Skip specific dates (holidays, maintenance windows, etc.)
+var calendar = new ExclusionCalendar(new[]
+{
+    new DateOnly(2026, 12, 25), // Christmas
+    new DateOnly(2026, 1, 1),   // New Year's Day
+});
+
+var schedule = Cron.Parse("0 9 * * MON-FRI");
+DateTimeOffset next = schedule.NextOccurrence(DateTimeOffset.UtcNow, calendar);
+
+// Combine with timezone
+var occurrences = schedule.GetOccurrences(start, end, eastern, calendar);
+```
+
+### Nth Weekday
+
+```csharp
+// Third Friday of every month at 9:00 AM
+var schedule = Cron.Parse("0 9 * * 5#3");
+DateTimeOffset next = schedule.NextOccurrence(DateTimeOffset.UtcNow);
+
+// Second Monday at midnight
+var schedule2 = Cron.Parse("0 0 * * 1#2");
+```
+
 ### Safe Parsing
 
 ```csharp
@@ -118,10 +159,29 @@ if (Cron.TryParse("*/5 * * * *", out var schedule))
 |--------|-------------|
 | `IsMatch(DateTimeOffset)` | Check if a time matches this schedule |
 | `NextOccurrence(DateTimeOffset)` | Get the next matching time after the given time |
+| `NextOccurrence(DateTimeOffset, ExclusionCalendar?)` | Get the next matching time, skipping excluded dates |
+| `NextOccurrence(DateTimeOffset, TimeZoneInfo)` | Get the next matching time in a time zone |
+| `NextOccurrence(DateTimeOffset, TimeZoneInfo, ExclusionCalendar?)` | Get the next matching time in a time zone, skipping excluded dates |
 | `PreviousOccurrence(DateTimeOffset)` | Get the previous matching time before the given time |
 | `GetOccurrences(DateTimeOffset, DateTimeOffset)` | List all matching times in a range |
+| `GetOccurrences(DateTimeOffset, DateTimeOffset, ExclusionCalendar?)` | List matching times in a range, skipping excluded dates |
+| `GetOccurrences(DateTimeOffset, DateTimeOffset, TimeZoneInfo)` | List matching times in a range in a time zone |
+| `GetOccurrences(DateTimeOffset, DateTimeOffset, TimeZoneInfo, ExclusionCalendar?)` | List matching times in a range in a time zone, skipping excluded dates |
 | `Describe()` | Get a human-readable description of the schedule |
 | `HasSeconds` | Whether the schedule uses 6-field format with seconds |
+
+### `ExclusionCalendar`
+
+| Method | Description |
+|--------|-------------|
+| `Add(DateOnly)` | Add a blackout date |
+| `AddRange(IEnumerable<DateOnly>)` | Add multiple blackout dates |
+| `Remove(DateOnly)` | Remove a blackout date |
+| `IsExcluded(DateOnly)` | Check if a date is excluded |
+| `IsExcluded(DateTimeOffset)` | Check if a time falls on an excluded date |
+| `Clear()` | Remove all excluded dates |
+| `GetDates()` | Get all excluded dates in ascending order |
+| `Count` | Number of excluded dates |
 
 ### `CronBuilder`
 

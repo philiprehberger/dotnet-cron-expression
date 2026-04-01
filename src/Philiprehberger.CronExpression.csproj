@@ -11,9 +11,9 @@
 
     <!-- Package metadata -->
     <PackageId>Philiprehberger.CronExpression</PackageId>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <Authors>Philip Rehberger</Authors>
-    <Description>Parse, validate, and evaluate cron expressions with next/previous occurrence calculation, shortcut aliases, fluent builder, and human-readable descriptions.</Description>
+    <Description>Parse, validate, and evaluate cron expressions with next/previous occurrence calculation, shortcut aliases, fluent builder, human-readable descriptions, timezone-aware scheduling, exclusion calendars, and Nth weekday support.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cron;scheduling;parser;cron-expression;time</PackageTags>

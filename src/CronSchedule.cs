@@ -60,7 +60,8 @@ public sealed class CronSchedule
             && _hour.Contains(time.Hour)
             && _dayOfMonth.Contains(time.Day)
             && _month.Contains(time.Month)
-            && _dayOfWeek.Contains((int)time.DayOfWeek);
+            && _dayOfWeek.Contains((int)time.DayOfWeek)
+            && _dayOfWeek.MatchesNthWeekday(time);
     }
 
     /// <summary>
@@ -70,6 +71,18 @@ public sealed class CronSchedule
     /// <returns>The next matching <see cref="DateTimeOffset"/>.</returns>
     /// <exception cref="InvalidOperationException">Thrown if no occurrence is found within 4 years.</exception>
     public DateTimeOffset NextOccurrence(DateTimeOffset after)
+    {
+        return NextOccurrence(after, exclusionCalendar: null);
+    }
+
+    /// <summary>
+    /// Computes the next occurrence strictly after the given time, skipping excluded dates.
+    /// </summary>
+    /// <param name="after">The reference time (exclusive).</param>
+    /// <param name="exclusionCalendar">An optional calendar of dates to skip.</param>
+    /// <returns>The next matching <see cref="DateTimeOffset"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no occurrence is found within 4 years.</exception>
+    public DateTimeOffset NextOccurrence(DateTimeOffset after, ExclusionCalendar? exclusionCalendar)
     {
         DateTimeOffset candidate;
         if (_second != null)
@@ -93,7 +106,9 @@ public sealed class CronSchedule
                 continue;
             }
 
-            if (!_dayOfMonth.Contains(candidate.Day) || !_dayOfWeek.Contains((int)candidate.DayOfWeek))
+            if (!_dayOfMonth.Contains(candidate.Day) || !_dayOfWeek.Contains((int)candidate.DayOfWeek)
+                || !_dayOfWeek.MatchesNthWeekday(candidate)
+                || (exclusionCalendar != null && exclusionCalendar.IsExcluded(candidate)))
             {
                 candidate = candidate.AddDays(1);
                 candidate = new DateTimeOffset(candidate.Year, candidate.Month, candidate.Day, 0, 0, 0, candidate.Offset);
@@ -118,6 +133,100 @@ public sealed class CronSchedule
             if (_second != null && !_second.Contains(candidate.Second))
             {
                 candidate = candidate.AddSeconds(1);
+                continue;
+            }
+
+            return candidate;
+        }
+
+        throw new InvalidOperationException($"No next occurrence found within 4 years for expression '{Expression}'.");
+    }
+
+    /// <summary>
+    /// Computes the next occurrence strictly after the given time, converted to the specified time zone.
+    /// Handles DST transitions correctly by converting to the target time zone before matching.
+    /// </summary>
+    /// <param name="after">The reference time (exclusive).</param>
+    /// <param name="timeZone">The time zone to evaluate the schedule in.</param>
+    /// <returns>The next matching <see cref="DateTimeOffset"/> in the specified time zone.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="timeZone"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if no occurrence is found within 4 years.</exception>
+    public DateTimeOffset NextOccurrence(DateTimeOffset after, TimeZoneInfo timeZone)
+    {
+        return NextOccurrence(after, timeZone, exclusionCalendar: null);
+    }
+
+    /// <summary>
+    /// Computes the next occurrence strictly after the given time, converted to the specified time zone,
+    /// skipping excluded dates. Handles DST transitions correctly.
+    /// </summary>
+    /// <param name="after">The reference time (exclusive).</param>
+    /// <param name="timeZone">The time zone to evaluate the schedule in.</param>
+    /// <param name="exclusionCalendar">An optional calendar of dates to skip.</param>
+    /// <returns>The next matching <see cref="DateTimeOffset"/> in the specified time zone.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="timeZone"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if no occurrence is found within 4 years.</exception>
+    public DateTimeOffset NextOccurrence(DateTimeOffset after, TimeZoneInfo timeZone, ExclusionCalendar? exclusionCalendar)
+    {
+        ArgumentNullException.ThrowIfNull(timeZone);
+
+        var zonedAfter = TimeZoneInfo.ConvertTime(after, timeZone);
+
+        DateTimeOffset candidate;
+        if (_second != null)
+        {
+            candidate = new DateTimeOffset(zonedAfter.Year, zonedAfter.Month, zonedAfter.Day,
+                zonedAfter.Hour, zonedAfter.Minute, zonedAfter.Second, zonedAfter.Offset).AddSeconds(1);
+        }
+        else
+        {
+            candidate = new DateTimeOffset(zonedAfter.Year, zonedAfter.Month, zonedAfter.Day,
+                zonedAfter.Hour, zonedAfter.Minute, 0, zonedAfter.Offset).AddMinutes(1);
+        }
+
+        var limit = zonedAfter.AddYears(4);
+
+        while (candidate <= limit)
+        {
+            // Re-resolve offset for the candidate date/time in the target time zone
+            candidate = ResolveInTimeZone(candidate.DateTime, timeZone);
+
+            if (!_month.Contains(candidate.Month))
+            {
+                var next = AdvanceToNextMonth(candidate);
+                candidate = ResolveInTimeZone(next.DateTime, timeZone);
+                continue;
+            }
+
+            if (!_dayOfMonth.Contains(candidate.Day) || !_dayOfWeek.Contains((int)candidate.DayOfWeek)
+                || !_dayOfWeek.MatchesNthWeekday(candidate)
+                || (exclusionCalendar != null && exclusionCalendar.IsExcluded(candidate)))
+            {
+                var nextDay = candidate.DateTime.Date.AddDays(1);
+                candidate = ResolveInTimeZone(nextDay, timeZone);
+                continue;
+            }
+
+            if (!_hour.Contains(candidate.Hour))
+            {
+                var nextHour = new DateTime(candidate.Year, candidate.Month, candidate.Day, candidate.Hour, 0, 0).AddHours(1);
+                candidate = ResolveInTimeZone(nextHour, timeZone);
+                continue;
+            }
+
+            if (!_minute.Contains(candidate.Minute))
+            {
+                var nextMinute = new DateTime(candidate.Year, candidate.Month, candidate.Day, candidate.Hour, candidate.Minute, 0).AddMinutes(1);
+                if (_second != null)
+                    nextMinute = new DateTime(nextMinute.Year, nextMinute.Month, nextMinute.Day, nextMinute.Hour, nextMinute.Minute, 0);
+                candidate = ResolveInTimeZone(nextMinute, timeZone);
+                continue;
+            }
+
+            if (_second != null && !_second.Contains(candidate.Second))
+            {
+                var nextSecond = candidate.DateTime.AddSeconds(1);
+                candidate = ResolveInTimeZone(nextSecond, timeZone);
                 continue;
             }
 
@@ -157,7 +266,8 @@ public sealed class CronSchedule
                 continue;
             }
 
-            if (!_dayOfMonth.Contains(candidate.Day) || !_dayOfWeek.Contains((int)candidate.DayOfWeek))
+            if (!_dayOfMonth.Contains(candidate.Day) || !_dayOfWeek.Contains((int)candidate.DayOfWeek)
+                || !_dayOfWeek.MatchesNthWeekday(candidate))
             {
                 candidate = candidate.AddDays(-1);
                 if (_second != null)
@@ -205,13 +315,26 @@ public sealed class CronSchedule
     /// <returns>An enumerable of matching times in chronological order.</returns>
     public IEnumerable<DateTimeOffset> GetOccurrences(DateTimeOffset start, DateTimeOffset end)
     {
+        return GetOccurrences(start, end, exclusionCalendar: null);
+    }
+
+    /// <summary>
+    /// Enumerates all matching occurrences within the specified range, skipping excluded dates.
+    /// </summary>
+    /// <param name="start">The start of the range (inclusive).</param>
+    /// <param name="end">The end of the range (inclusive).</param>
+    /// <param name="exclusionCalendar">An optional calendar of dates to skip.</param>
+    /// <returns>An enumerable of matching times in chronological order.</returns>
+    public IEnumerable<DateTimeOffset> GetOccurrences(DateTimeOffset start, DateTimeOffset end, ExclusionCalendar? exclusionCalendar)
+    {
         DateTimeOffset current;
         if (_second != null)
             current = new DateTimeOffset(start.Year, start.Month, start.Day, start.Hour, start.Minute, start.Second, start.Offset);
         else
             current = new DateTimeOffset(start.Year, start.Month, start.Day, start.Hour, start.Minute, 0, start.Offset);
 
-        if (IsMatch(current) && current >= start)
+        if (IsMatch(current) && current >= start
+            && (exclusionCalendar == null || !exclusionCalendar.IsExcluded(current)))
         {
             yield return current;
         }
@@ -220,7 +343,7 @@ public sealed class CronSchedule
         {
             try
             {
-                current = NextOccurrence(current);
+                current = NextOccurrence(current, exclusionCalendar);
             }
             catch (InvalidOperationException)
             {
@@ -235,12 +358,97 @@ public sealed class CronSchedule
     }
 
     /// <summary>
+    /// Enumerates all matching occurrences within the specified range in the given time zone.
+    /// Handles DST transitions correctly.
+    /// </summary>
+    /// <param name="start">The start of the range (inclusive).</param>
+    /// <param name="end">The end of the range (inclusive).</param>
+    /// <param name="timeZone">The time zone to evaluate the schedule in.</param>
+    /// <returns>An enumerable of matching times in chronological order.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="timeZone"/> is null.</exception>
+    public IEnumerable<DateTimeOffset> GetOccurrences(DateTimeOffset start, DateTimeOffset end, TimeZoneInfo timeZone)
+    {
+        return GetOccurrences(start, end, timeZone, exclusionCalendar: null);
+    }
+
+    /// <summary>
+    /// Enumerates all matching occurrences within the specified range in the given time zone,
+    /// skipping excluded dates. Handles DST transitions correctly.
+    /// </summary>
+    /// <param name="start">The start of the range (inclusive).</param>
+    /// <param name="end">The end of the range (inclusive).</param>
+    /// <param name="timeZone">The time zone to evaluate the schedule in.</param>
+    /// <param name="exclusionCalendar">An optional calendar of dates to skip.</param>
+    /// <returns>An enumerable of matching times in chronological order.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="timeZone"/> is null.</exception>
+    public IEnumerable<DateTimeOffset> GetOccurrences(DateTimeOffset start, DateTimeOffset end, TimeZoneInfo timeZone, ExclusionCalendar? exclusionCalendar)
+    {
+        ArgumentNullException.ThrowIfNull(timeZone);
+
+        var zonedStart = TimeZoneInfo.ConvertTime(start, timeZone);
+        var zonedEnd = TimeZoneInfo.ConvertTime(end, timeZone);
+
+        DateTimeOffset current;
+        if (_second != null)
+            current = ResolveInTimeZone(new DateTime(zonedStart.Year, zonedStart.Month, zonedStart.Day,
+                zonedStart.Hour, zonedStart.Minute, zonedStart.Second), timeZone);
+        else
+            current = ResolveInTimeZone(new DateTime(zonedStart.Year, zonedStart.Month, zonedStart.Day,
+                zonedStart.Hour, zonedStart.Minute, 0), timeZone);
+
+        if (IsMatch(current) && current >= zonedStart
+            && (exclusionCalendar == null || !exclusionCalendar.IsExcluded(current)))
+        {
+            yield return current;
+        }
+
+        while (true)
+        {
+            try
+            {
+                current = NextOccurrence(current, timeZone, exclusionCalendar);
+            }
+            catch (InvalidOperationException)
+            {
+                yield break;
+            }
+
+            if (current > zonedEnd)
+                yield break;
+
+            yield return current;
+        }
+    }
+
+    /// <summary>
     /// Returns a human-readable description of this cron schedule.
     /// </summary>
     /// <returns>A string describing the schedule in plain English.</returns>
     public string Describe()
     {
         return CronDescriber.Describe(_second, _minute, _hour, _dayOfMonth, _month, _dayOfWeek);
+    }
+
+    private static DateTimeOffset ResolveInTimeZone(DateTime dt, TimeZoneInfo timeZone)
+    {
+        if (timeZone.IsInvalidTime(dt))
+        {
+            // DST spring-forward gap: advance past the gap
+            var rules = timeZone.GetAdjustmentRules();
+            var adjustment = TimeSpan.FromHours(1); // standard DST adjustment
+            foreach (var rule in rules)
+            {
+                if (rule.DateStart <= dt && dt <= rule.DateEnd)
+                {
+                    adjustment = rule.DaylightDelta;
+                    break;
+                }
+            }
+            dt = dt.Add(adjustment);
+        }
+
+        var offset = timeZone.GetUtcOffset(dt);
+        return new DateTimeOffset(dt, offset);
     }
 
     private static DateTimeOffset AdvanceToNextMonth(DateTimeOffset dt)

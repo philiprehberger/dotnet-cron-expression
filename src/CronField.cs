@@ -2,7 +2,7 @@ namespace Philiprehberger.CronExpression;
 
 /// <summary>
 /// Represents a single parsed field of a cron expression.
-/// Handles wildcards, specific values, ranges, steps, lists, and name aliases.
+/// Handles wildcards, specific values, ranges, steps, lists, name aliases, and Nth weekday (#N) patterns.
 /// </summary>
 internal sealed class CronField
 {
@@ -20,6 +20,7 @@ internal sealed class CronField
     };
 
     private readonly HashSet<int> _values;
+    private readonly List<NthWeekday>? _nthWeekdays;
 
     /// <summary>
     /// Gets the minimum allowed value for this field.
@@ -36,12 +37,18 @@ internal sealed class CronField
     /// </summary>
     public string Token { get; }
 
-    private CronField(HashSet<int> values, int min, int max, string token)
+    /// <summary>
+    /// Gets whether this field contains Nth weekday constraints.
+    /// </summary>
+    public bool HasNthWeekday => _nthWeekdays is { Count: > 0 };
+
+    private CronField(HashSet<int> values, int min, int max, string token, List<NthWeekday>? nthWeekdays = null)
     {
         _values = values;
         Min = min;
         Max = max;
         Token = token;
+        _nthWeekdays = nthWeekdays;
     }
 
     /// <summary>
@@ -50,6 +57,30 @@ internal sealed class CronField
     /// <param name="value">The value to test.</param>
     /// <returns>True if the value is contained in the set of matching values.</returns>
     public bool Contains(int value) => _values.Contains(value);
+
+    /// <summary>
+    /// Checks whether the given date matches Nth weekday constraints (e.g. third Friday).
+    /// When no Nth weekday constraints are present, returns true.
+    /// </summary>
+    /// <param name="date">The date to check.</param>
+    /// <returns>True if the date satisfies all Nth weekday constraints or no constraints are present.</returns>
+    public bool MatchesNthWeekday(DateTimeOffset date)
+    {
+        if (_nthWeekdays is not { Count: > 0 })
+            return true;
+
+        foreach (var nth in _nthWeekdays)
+        {
+            if ((int)date.DayOfWeek == nth.DayOfWeek)
+            {
+                int occurrence = (date.Day - 1) / 7 + 1;
+                if (occurrence == nth.Occurrence)
+                    return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Gets all matching values in ascending order.
@@ -82,10 +113,32 @@ internal sealed class CronField
     public static CronField Parse(string token, int min, int max, FieldType fieldType, string expression, int fieldIndex)
     {
         var values = new HashSet<int>();
+        List<NthWeekday>? nthWeekdays = null;
 
         foreach (var part in token.Split(','))
         {
-            ParsePart(part.Trim(), min, max, fieldType, expression, fieldIndex, values);
+            var trimmed = part.Trim();
+
+            // Handle Nth weekday pattern (e.g. 5#3 = third Friday)
+            if (fieldType == FieldType.DayOfWeek && trimmed.Contains('#'))
+            {
+                var hashParts = trimmed.Split('#', 2);
+                int dow = ResolveValue(hashParts[0], fieldType, expression, fieldIndex);
+                int nth = ParseInt(hashParts[1], expression, fieldIndex);
+
+                if (dow < 0 || dow > 6)
+                    throw new CronParseException($"Day of week {dow} is out of range [0-6] in '{trimmed}'.", expression, fieldIndex);
+                if (nth < 1 || nth > 5)
+                    throw new CronParseException($"Nth occurrence {nth} is out of range [1-5] in '{trimmed}'.", expression, fieldIndex);
+
+                nthWeekdays ??= new List<NthWeekday>();
+                nthWeekdays.Add(new NthWeekday(dow, nth));
+                values.Add(dow);
+            }
+            else
+            {
+                ParsePart(trimmed, min, max, fieldType, expression, fieldIndex, values);
+            }
         }
 
         if (values.Count == 0)
@@ -93,7 +146,7 @@ internal sealed class CronField
             throw new CronParseException($"Field {fieldIndex} produced no valid values from '{token}'.", expression, fieldIndex);
         }
 
-        return new CronField(values, min, max, token);
+        return new CronField(values, min, max, token, nthWeekdays);
     }
 
     private static void ParsePart(string part, int min, int max, FieldType fieldType, string expression, int fieldIndex, HashSet<int> values)
@@ -199,3 +252,8 @@ internal enum FieldType
     /// <summary>Day of week field (0-6, Sunday=0).</summary>
     DayOfWeek
 }
+
+/// <summary>
+/// Represents an Nth weekday constraint (e.g. third Friday = day 5, occurrence 3).
+/// </summary>
+internal sealed record NthWeekday(int DayOfWeek, int Occurrence);
